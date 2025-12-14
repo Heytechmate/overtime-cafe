@@ -118,7 +118,8 @@ export default function Home() {
             <Button className="bg-teal-600 hover:bg-teal-700">Subscribe</Button>
           </div>
           <p className="text-xs text-stone-300 pt-8">© 2026 OverTime Café. All rights reserved.</p>
-          <p class="attribution"> Website by <a href="https://www.heytechmate.com" target="_blank">HeyTechMate.com</a></p>
+          <p className="text-xs text-stone-300 pt-8">Website by <a href="https://www.heytechmate.com" target="_blank">HeyTechMate.com</a></p>
+          
         </div>
       </footer>
     </div>
