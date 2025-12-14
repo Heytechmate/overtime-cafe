@@ -5,14 +5,14 @@ import { motion } from "framer-motion";
 import { ArrowRight, Coffee, Gamepad2, Laptop, Moon, Paintbrush, Users, CreditCard, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-// Removed unused "Image" import to fix build error
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-stone-50 dark:bg-stone-950 font-sans selection:bg-teal-100 selection:text-teal-900">
+    // 1. Parent Container: h-screen, overflow-y-scroll, snap-y, snap-mandatory
+    <div className="h-screen w-full overflow-y-scroll snap-y snap-mandatory scroll-smooth bg-stone-50 dark:bg-stone-950 font-sans selection:bg-teal-100 selection:text-teal-900">
       
-      {/* 1. Hero Section */}
-      <section className="relative px-6 pt-24 pb-12 text-center md:pt-32 md:px-12">
+      {/* 2. Hero Section: h-screen, snap-start, flex-center */}
+      <section className="h-screen w-full snap-start flex flex-col items-center justify-center relative px-6 text-center md:px-12">
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -33,9 +33,9 @@ export default function Home() {
         </motion.div>
       </section>
 
-      {/* 2. Interactive Bento Grid */}
-      <section className="px-6 pb-24 md:px-12 max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 auto-rows-[180px]">
+      {/* 3. Bento Grid Section: min-h-screen, snap-start, flex-center */}
+      <section className="min-h-screen w-full snap-start flex flex-col items-center justify-center px-6 py-12 md:px-12 max-w-7xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 auto-rows-[180px] w-full">
           
           <BentoCard 
             href="/menu" 
@@ -108,8 +108,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 3. Footer */}
-      <footer className="bg-white dark:bg-stone-900 border-t border-stone-200 py-16 px-6">
+      {/* 4. Footer Section: h-screen, snap-start, flex-center */}
+      <footer className="h-screen w-full snap-start flex flex-col items-center justify-center bg-white dark:bg-stone-900 border-t border-stone-200 px-6">
         <div className="max-w-4xl mx-auto text-center space-y-6">
           <h2 className="text-2xl font-bold text-stone-900 dark:text-white">Join the Inner Circle</h2>
           <p className="text-stone-500">Get weekly updates on workshops, new menu items, and gaming tournaments.</p>
@@ -117,8 +117,13 @@ export default function Home() {
             <Input placeholder="Enter your email" className="bg-stone-50" />
             <Button className="bg-teal-600 hover:bg-teal-700">Subscribe</Button>
           </div>
-          <p className="text-xs text-stone-300 pt-8">© 2026 OverTime Café. All rights reserved.</p>
-          <p className="text-xs text-stone-300 pt-8">Website by <a href="https://www.heytechmate.com" target="_blank">HeyTechMate.com</a></p>
+          
+          <div className="pt-8 space-y-1">
+            <p className="text-xs text-stone-300">© 2026 OverTime Café. All rights reserved.</p>
+            <p className="text-xs text-stone-300">
+              Website by <a href="https://www.heytechmate.com" target="_blank" className="hover:text-stone-400 transition-colors">HeyTechMate.com</a>
+            </p>
+          </div>
           
         </div>
       </footer>
