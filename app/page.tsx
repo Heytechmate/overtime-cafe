@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowRight, Coffee, Gamepad2, Laptop, Moon, Paintbrush, Users, CreditCard, MapPin } from "lucide-react";
+import { ArrowRight, Coffee, Gamepad2, Laptop, Moon, Paintbrush, Users, CreditCard, MapPin, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 // Removed unused "Image" import to fix build error
@@ -13,6 +13,17 @@ export default function Home() {
       
       {/* 1. Hero Section */}
       <section className="relative px-6 pt-24 pb-12 text-center md:pt-32 md:px-12">
+        
+        {/* --- ADDED: Login Button (Top Right) --- */}
+        <div className="absolute top-6 right-6 md:top-8 md:right-8 z-50">
+          <Link href="/auth">
+            <Button variant="ghost" className="text-sm font-medium text-stone-900 dark:text-stone-50 hover:bg-stone-200/50 dark:hover:bg-stone-800/50 transition-colors gap-2">
+              Login <LogIn className="w-4 h-4" />
+            </Button>
+          </Link>
+        </div>
+        {/* --------------------------------------- */}
+
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
