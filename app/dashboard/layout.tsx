@@ -1,4 +1,3 @@
-import { Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter } from "@/components/ui/sidebar" // *Note: If using strict shadcn sidebar, or we build a custom one using simple Tailwind below for simplicity and speed.*
 import { BookOpen, Coffee, Home, LayoutDashboard, LogOut, Moon, Settings, User } from "lucide-react";
 import Link from "next/link";
 
