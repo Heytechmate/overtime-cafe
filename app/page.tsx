@@ -21,7 +21,7 @@ export default function Home() {
         >
           <div className="inline-flex items-center rounded-full border border-stone-200 bg-white px-3 py-1 text-sm text-stone-500 shadow-sm dark:bg-stone-900 dark:border-stone-800">
             <span className="flex h-2 w-2 rounded-full bg-teal-500 mr-2 animate-pulse"></span>
-            Open 24/7 in Colombo 07
+            Open 24/7 in Colombo.
           </div>
           <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-stone-900 dark:text-stone-50">
             OverTime <span className="text-teal-600">Café</span>
@@ -117,7 +117,8 @@ export default function Home() {
             <Input placeholder="Enter your email" className="bg-stone-50" />
             <Button className="bg-teal-600 hover:bg-teal-700">Subscribe</Button>
           </div>
-          <p className="text-xs text-stone-300 pt-8">© 2024 OverTime Café. All rights reserved.</p>
+          <p className="text-xs text-stone-300 pt-8">© 2026 OverTime Café. All rights reserved.</p>
+          <p class="attribution"> Website by <a href="https://www.heytechmate.com" target="_blank">HeyTechMate.com</a></p>
         </div>
       </footer>
     </div>
