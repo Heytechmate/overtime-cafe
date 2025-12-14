@@ -13,19 +13,19 @@ import { useRouter } from "next/navigation";
 export default function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const router = useRouter();
+  const router = useRouter(); // Initialize router here
 
   const handleAuth = async (action: "login" | "signup") => {
     try {
       if (action === "signup") {
         await createUserWithEmailAndPassword(auth, email, password);
-        // TODO: Add user to Firestore with "Member" role
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
-      router.push("/menu"); // Redirect to menu after success
+      // Redirect to dashboard after success
+      router.push("/dashboard"); 
     } catch (error: any) {
-      alert(error.message); // In production, we use nice Toasts, not alerts
+      alert(error.message);
     }
   };
 

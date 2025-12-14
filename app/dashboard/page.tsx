@@ -2,7 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Clock, Zap, Paintbrush, CalendarDays } from "lucide-react";
+import { Zap, Paintbrush, CalendarDays, Moon } from "lucide-react";
 
 export default function DashboardPage() {
   return (
@@ -103,7 +103,7 @@ export default function DashboardPage() {
             <CardDescription>You are in the top 10% of members.</CardDescription>
           </CardHeader>
           <CardContent className="flex items-center justify-center h-[180px]">
-             {/* Placeholder for a Chart (We would use Recharts here later) */}
+             {/* Placeholder for a Chart */}
              <div className="text-center space-y-2">
                 <span className="text-5xl font-bold text-stone-800">12.5</span>
                 <p className="text-stone-500">Hours Focused</p>
