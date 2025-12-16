@@ -1,8 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
-// ✅ Added 'runTransaction' and 'doc'
+import { useState, useEffect } from "react";
+import { 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  signInWithPopup, 
+  signInWithRedirect, 
+  getRedirectResult, 
+  GoogleAuthProvider 
+} from "firebase/auth";
 import { doc, getDoc, runTransaction } from "firebase/firestore"; 
 import { auth, db } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
@@ -13,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
+// 🔒 STRICT ADMIN UID
 const ADMIN_UID = "opChtvs1YJghMgry81qKMyM2jlm2";
 
 function GoogleIcon() {
@@ -29,6 +36,23 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  // ✅ CHECK FOR REDIRECT RESULT (When user comes back from Google on mobile)
+  useEffect(() => {
+    const checkRedirect = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result && result.user) {
+          setLoading(true);
+          await handleUserDestination(result.user);
+        }
+      } catch (error: any) {
+        console.error("Redirect Login Error:", error);
+        // Don't alert here, just log it. Redirect errors can be noisy.
+      }
+    };
+    checkRedirect();
+  }, []);
+
   const handleUserDestination = async (user: any) => {
     
     if (user.uid === ADMIN_UID) {
@@ -40,7 +64,7 @@ export default function AuthPage() {
     const userSnap = await getDoc(userDocRef);
 
     if (!userSnap.exists()) {
-      // ✅ GENERATE UNIQUE ID (Transaction)
+      // ✅ CREATE NEW USER (With OT0001 ID)
       try {
         await runTransaction(db, async (transaction) => {
           const counterRef = doc(db, "counters", "members");
@@ -51,17 +75,13 @@ export default function AuthPage() {
             newCount = counterSnap.data().count + 1;
           }
 
-          // Format: OT0001, OT0002...
           const memberId = `OT${newCount.toString().padStart(4, '0')}`;
 
-          // Update Counter
           transaction.set(counterRef, { count: newCount });
-
-          // Create User Profile with Member ID
           transaction.set(userDocRef, {
             email: user.email,
             uid: user.uid,
-            memberId: memberId, // ⭐️ Unique ID
+            memberId: memberId,
             points: 0,
             tier: "Member",
             createdAt: new Date(),
@@ -71,11 +91,12 @@ export default function AuthPage() {
         
         router.push("/onboarding"); 
       } catch (error) {
-        console.error("Transaction failed: ", error);
-        alert("Setup failed. Please try again.");
+        console.error("Setup failed: ", error);
+        alert("Account setup failed. Please try again.");
       }
 
     } else {
+      // ✅ EXISTING USER CHECK
       const userData = userSnap.data();
       if (!userData.firstName || !userData.birthDate) {
         router.push("/onboarding");
@@ -104,14 +125,26 @@ export default function AuthPage() {
 
   const handleGoogleLogin = async () => {
     setLoading(true);
+    const provider = new GoogleAuthProvider();
+    
     try {
-      const provider = new GoogleAuthProvider();
+      // 📱 TRY POPUP FIRST (Works on Desktop)
       const result = await signInWithPopup(auth, provider);
       await handleUserDestination(result.user);
     } catch (error: any) {
-      alert("Google Login Error: " + error.message);
-    } finally {
-      setLoading(false);
+      // ⚠️ IF POPUP FAILS (Mobile/Blocker), TRY REDIRECT
+      if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
+        try {
+          await signInWithRedirect(auth, provider);
+          // Code stops here while page redirects to Google
+        } catch (redirectError: any) {
+          alert("Login failed: " + redirectError.message);
+          setLoading(false);
+        }
+      } else {
+        alert("Google Login Error: " + error.message);
+        setLoading(false);
+      }
     }
   };
 
