@@ -2,16 +2,19 @@
 
 import { useState } from "react";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+// ✅ Added 'runTransaction' and 'doc'
+import { doc, getDoc, runTransaction } from "firebase/firestore"; 
+import { auth, db } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { useRouter } from "next/navigation";
-import { Globe, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
-// Custom Google Icon
+const ADMIN_UID = "opChtvs1YJghMgry81qKMyM2jlm2";
+
 function GoogleIcon() {
   return (
     <svg className="mr-2 h-4 w-4" aria-hidden="true" focusable="false" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512">
@@ -26,17 +29,74 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  const handleUserDestination = async (user: any) => {
+    
+    if (user.uid === ADMIN_UID) {
+      router.push("/admin/dashboard");
+      return;
+    }
+
+    const userDocRef = doc(db, "users", user.uid);
+    const userSnap = await getDoc(userDocRef);
+
+    if (!userSnap.exists()) {
+      // ✅ GENERATE UNIQUE ID (Transaction)
+      try {
+        await runTransaction(db, async (transaction) => {
+          const counterRef = doc(db, "counters", "members");
+          const counterSnap = await transaction.get(counterRef);
+
+          let newCount = 1;
+          if (counterSnap.exists()) {
+            newCount = counterSnap.data().count + 1;
+          }
+
+          // Format: OT0001, OT0002...
+          const memberId = `OT${newCount.toString().padStart(4, '0')}`;
+
+          // Update Counter
+          transaction.set(counterRef, { count: newCount });
+
+          // Create User Profile with Member ID
+          transaction.set(userDocRef, {
+            email: user.email,
+            uid: user.uid,
+            memberId: memberId, // ⭐️ Unique ID
+            points: 0,
+            tier: "Member",
+            createdAt: new Date(),
+            isProfileComplete: false
+          });
+        });
+        
+        router.push("/onboarding"); 
+      } catch (error) {
+        console.error("Transaction failed: ", error);
+        alert("Setup failed. Please try again.");
+      }
+
+    } else {
+      const userData = userSnap.data();
+      if (!userData.firstName || !userData.birthDate) {
+        router.push("/onboarding");
+      } else {
+        router.push("/dashboard");
+      }
+    }
+  };
+
   const handleAuth = async (action: "login" | "signup") => {
     setLoading(true);
     try {
+      let userCredential;
       if (action === "signup") {
-        await createUserWithEmailAndPassword(auth, email, password);
+        userCredential = await createUserWithEmailAndPassword(auth, email, password);
       } else {
-        await signInWithEmailAndPassword(auth, email, password);
+        userCredential = await signInWithEmailAndPassword(auth, email, password);
       }
-      router.push("/dashboard");
+      await handleUserDestination(userCredential.user);
     } catch (error: any) {
-      alert(error.message);
+      alert("Error: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -46,10 +106,10 @@ export default function AuthPage() {
     setLoading(true);
     try {
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-      router.push("/dashboard");
+      const result = await signInWithPopup(auth, provider);
+      await handleUserDestination(result.user);
     } catch (error: any) {
-      alert(error.message);
+      alert("Google Login Error: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -69,7 +129,6 @@ export default function AuthPage() {
               <TabsTrigger value="signup">Join</TabsTrigger>
             </TabsList>
             
-            {/* Login Form */}
             <TabsContent value="login" className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
@@ -95,7 +154,6 @@ export default function AuthPage() {
               </Button>
             </TabsContent>
 
-            {/* Sign Up Form */}
             <TabsContent value="signup" className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="s-email">Email</Label>
@@ -111,13 +169,11 @@ export default function AuthPage() {
             </TabsContent>
           </Tabs>
 
-          {/* Divider */}
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-stone-200 dark:border-stone-800" /></div>
             <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-2 text-stone-500 dark:bg-stone-950">Or continue with</span></div>
           </div>
 
-          {/* Google Button */}
           <Button variant="outline" className="w-full" onClick={handleGoogleLogin} disabled={loading}>
             <GoogleIcon /> Sign in with Google
           </Button>

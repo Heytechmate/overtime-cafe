@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, signOut } from "firebase/auth"; 
 import { auth } from "@/lib/firebase";
 import { LayoutDashboard, Coffee, Users, FileText, LogOut, Loader2 } from "lucide-react";
 
@@ -20,7 +20,6 @@ export default function AdminDashboardLayout({
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      // Check for matching UID
       if (!user || user.uid !== ADMIN_UID) {
         router.push("/admin"); 
       } else {
@@ -29,6 +28,16 @@ export default function AdminDashboardLayout({
     });
     return () => unsubscribe();
   }, [router]);
+
+  // ✅ UPDATED: Logout now goes to Main Page
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      router.push("/"); // <--- Changed from "/admin" to "/"
+    } catch (error) {
+      console.error("Logout failed", error);
+    }
+  };
 
   if (loading) {
     return (
@@ -43,7 +52,7 @@ export default function AdminDashboardLayout({
       <aside className="w-64 bg-white dark:bg-stone-950 border-r border-stone-200 hidden md:flex flex-col">
         <div className="p-6 border-b border-stone-100 dark:border-stone-800">
           <h2 className="text-xl font-bold tracking-tight text-stone-900 dark:text-stone-100">
-            OverTime <span className="text-teal-600">Admin</span>
+            Hey Tech <span className="text-teal-600">Mate</span>
           </h2>
         </div>
         
@@ -55,10 +64,13 @@ export default function AdminDashboardLayout({
         </nav>
 
         <div className="p-4 border-t border-stone-100 dark:border-stone-800">
-          <Link href="/admin" className="flex items-center gap-3 px-3 py-2 text-stone-500 hover:text-red-600 transition-colors">
+          <button 
+            onClick={handleLogout}
+            className="flex w-full items-center gap-3 px-3 py-2 text-stone-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+          >
             <LogOut size={20} />
             <span className="text-sm font-medium">Logout</span>
-          </Link>
+          </button>
         </div>
       </aside>
 
@@ -69,7 +81,6 @@ export default function AdminDashboardLayout({
   );
 }
 
-// Helper Component
 function AdminNavLink({ href, icon, label }: { href: string; icon: any; label: string }) {
   const pathname = usePathname();
   const isActive = href === "/admin/dashboard" ? pathname === href : pathname.startsWith(href);

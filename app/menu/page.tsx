@@ -1,340 +1,128 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { useState, useEffect } from "react";
+import { collection, onSnapshot } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth"; // Import Auth
+import { db, auth } from "@/lib/firebase"; // Import Auth
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Coffee, BookOpen, Paintbrush, ArrowLeft, Loader2, Star, Sparkles, LayoutGrid, List, Plus, X } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { AnimatePresence, motion } from "framer-motion";
-
-interface MenuItem {
-  id: string;
-  name: string;
-  category: string;
-  price: string;
-  description: string;
-  tags: string[];
-  isRecommended?: boolean;
-  rating?: number;
-  reviewCount?: number;
-}
+import { Coffee, ArrowLeft, LayoutDashboard } from "lucide-react";
+import Link from "next/link"; // Import Link
 
 export default function MenuPage() {
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [menuItems, setMenuItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeCategory, setActiveCategory] = useState("All");
-  
-  // Default view is "list" for mobile friendliness
-  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
-  const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
+  const [user, setUser] = useState<any>(null); // Track User
 
   useEffect(() => {
-    const fetchMenu = async () => {
-      try {
-        const querySnapshot = await getDocs(collection(db, "menu"));
-        const items = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as MenuItem[];
-        setMenuItems(items);
-      } catch (error) {
-        console.error("Error fetching menu:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    // 1. Check if user is logged in
+    const unsubAuth = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+    });
 
-    fetchMenu();
+    // 2. Fetch Menu
+    const unsubscribe = onSnapshot(collection(db, "menu"), (snapshot) => {
+      const items = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setMenuItems(items);
+      setLoading(false);
+    });
+
+    return () => {
+      unsubscribe();
+      unsubAuth();
+    };
   }, []);
 
-  const filteredItems = menuItems.filter(item => {
-    if (activeCategory === "All") return true;
-    if (activeCategory === "Recommended") return item.isRecommended;
-    return item.category === activeCategory;
-  });
+  const categories = ["Beverage", "Snack", "Productivity", "Creative"];
 
   return (
-    <div className="min-h-screen bg-stone-50 p-4 md:p-12 font-sans relative">
+    <div className="min-h-screen bg-stone-50 dark:bg-stone-950 font-sans pb-20">
       
-      {/* Header */}
-      <div className="max-w-6xl mx-auto mb-8 md:mb-12">
-        <Link href="/" className="text-sm text-stone-500 hover:text-teal-600 mb-6 inline-flex items-center gap-2 transition-colors">
-          <ArrowLeft className="w-4 h-4" /> Back to Hub
-        </Link>
-        <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4">
-          <div>
-            <h1 className="text-3xl md:text-4xl font-bold text-stone-900 tracking-tight">The Menu</h1>
-            <p className="text-stone-500 mt-2">Fuel for your work, art, and rest.</p>
-          </div>
-          <Button className="bg-stone-900 w-full md:w-auto text-white">My Order</Button>
-        </div>
-      </div>
-
-      {/* Controls Row */}
-      <div className="flex flex-col md:flex-row gap-4 mb-8 max-w-6xl mx-auto items-start md:items-center justify-between">
+      {/* Navbar / Header */}
+      <header className="sticky top-0 z-50 bg-white/80 dark:bg-stone-900/80 backdrop-blur-md border-b border-stone-200 dark:border-stone-800 px-6 py-4 flex items-center justify-between">
         
-        {/* Categories Filter */}
-        <div className="flex gap-3 overflow-x-auto pb-2 md:pb-0 scrollbar-hide w-full md:w-auto mask-gradient">
-          <CategoryBtn label="All" icon={<Coffee className="w-4 h-4 mr-2"/>} active={activeCategory} onClick={setActiveCategory} />
-          <CategoryBtn label="Recommended" icon={<Sparkles className="w-4 h-4 mr-2 text-amber-500"/>} active={activeCategory} onClick={setActiveCategory} />
-          <CategoryBtn label="Beverage" icon={<Coffee className="w-4 h-4 mr-2"/>} active={activeCategory} onClick={setActiveCategory} />
-          <CategoryBtn label="Snack" icon={<BookOpen className="w-4 h-4 mr-2"/>} active={activeCategory} onClick={setActiveCategory} />
-          <CategoryBtn label="Creative" icon={<Paintbrush className="w-4 h-4 mr-2"/>} active={activeCategory} onClick={setActiveCategory} />
-        </div>
+        {/* ✅ SMART BACK BUTTON */}
+        {user ? (
+          <Link href="/dashboard">
+            <Button variant="ghost" className="gap-2 text-stone-600 hover:text-stone-900">
+              <LayoutDashboard size={18} /> Back to Dashboard
+            </Button>
+          </Link>
+        ) : (
+          <Link href="/">
+             <Button variant="ghost" className="gap-2 text-stone-600">
+               <ArrowLeft size={18} /> Home
+             </Button>
+          </Link>
+        )}
 
-        {/* View Toggle */}
-        <div className="flex md:hidden bg-stone-200/50 p-1 rounded-full self-end">
-          <button 
-            onClick={() => setViewMode("grid")}
-            className={cn(
-              "p-2 rounded-full transition-all duration-300",
-              viewMode === "grid" ? "bg-white shadow-sm text-stone-900" : "text-stone-400 hover:text-stone-600"
-            )}
-          >
-            <LayoutGrid className="w-4 h-4" />
-          </button>
-          <button 
-            onClick={() => setViewMode("list")}
-            className={cn(
-              "p-2 rounded-full transition-all duration-300",
-              viewMode === "list" ? "bg-white shadow-sm text-stone-900" : "text-stone-400 hover:text-stone-600"
-            )}
-          >
-            <List className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
+        <h1 className="text-lg font-bold text-stone-900 dark:text-stone-100">
+          Hey Tech <span className="text-teal-600">Menu</span>
+        </h1>
+        
+        <div className="w-10"></div> {/* Spacer for alignment */}
+      </header>
 
-      {/* Content Area */}
-      {loading ? (
-        <div className="flex justify-center py-20 text-stone-400">
-          <Loader2 className="w-8 h-8 animate-spin" />
-        </div>
-      ) : (
-        <div className={cn(
-          "max-w-6xl mx-auto pb-24 transition-all duration-500",
-          viewMode === "grid" 
-            ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" 
-            : "flex flex-col gap-4 md:grid md:grid-cols-2 lg:grid-cols-3" 
-        )}>
-          {filteredItems.map((item) => (
-            viewMode === "list" ? (
-              // --- SMART LIST CARD ---
-              <Card key={item.id} className="md:hidden flex flex-row overflow-hidden border-none shadow-sm hover:shadow-md transition-all p-3 gap-4 items-center bg-white group">
-                 <div 
-                   onClick={() => setSelectedItem(item)}
-                   className="h-24 w-24 bg-stone-200 rounded-xl flex-shrink-0 relative overflow-hidden active:scale-95 transition-transform cursor-pointer"
-                 >
-                    <div className="absolute inset-0 bg-stone-200" />
-                    {item.isRecommended && (
-                       <div className="absolute top-0 right-0 p-1 bg-amber-400 rounded-bl-lg z-10">
-                          <Sparkles className="w-3 h-3 text-black" />
-                       </div>
-                    )}
-                 </div>
-                 
-                 <div className="flex-1 min-w-0 flex flex-col justify-between h-24 py-1">
-                    <div onClick={() => setSelectedItem(item)} className="cursor-pointer">
-                      <div className="flex justify-between items-start">
-                         <h3 className="font-bold text-stone-900 truncate text-base">{item.name}</h3>
-                         <span className="font-bold text-teal-700 text-sm whitespace-nowrap ml-2">{item.price}</span>
-                      </div>
-                      <p className="text-xs text-stone-500 line-clamp-1 mt-1 leading-tight">{item.description}</p>
-                      <span className="text-[10px] text-stone-400 underline decoration-stone-300 mt-1 inline-block">More details</span>
-                    </div>
-                    
-                    <div className="flex justify-between items-end mt-1">
-                        <div className="flex items-center gap-2">
-                           {item.rating && (
-                             <div className="flex items-center text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md">
-                               <Star className="w-2.5 h-2.5 mr-1 fill-amber-600" />
-                               {item.rating}
-                             </div>
-                           )}
+      <main className="max-w-5xl mx-auto p-6 space-y-12">
+        {loading ? (
+          <p className="text-center text-stone-500 mt-20">Loading menu...</p>
+        ) : (
+          categories.map((category) => {
+            const categoryItems = menuItems.filter((item) => item.category === category);
+            if (categoryItems.length === 0) return null;
+
+            return (
+              <section key={category}>
+                <h2 className="text-2xl font-bold text-stone-800 dark:text-stone-100 mb-6 border-l-4 border-teal-600 pl-4">
+                  {category}s
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {categoryItems.map((item) => (
+                    <Card key={item.id} className="border-none shadow-md hover:shadow-lg transition-shadow bg-white dark:bg-stone-900 overflow-hidden group">
+                      <div className="h-2 bg-stone-100 dark:bg-stone-800 group-hover:bg-teal-600 transition-colors" />
+                      <CardHeader className="pb-2">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <CardTitle className="text-lg font-bold text-stone-900 dark:text-stone-50 flex items-center gap-2">
+                              {item.name}
+                              {item.isRecommended && (
+                                <Badge variant="secondary" className="bg-amber-100 text-amber-700 hover:bg-amber-100 text-[10px]">
+                                  Chef's Choice
+                                </Badge>
+                              )}
+                            </CardTitle>
+                            <CardDescription className="mt-1 line-clamp-2">{item.description}</CardDescription>
+                          </div>
+                          <span className="font-bold text-lg text-teal-700 dark:text-teal-400">
+                            {item.price}
+                          </span>
                         </div>
-                        <Button size="icon" className="h-8 w-8 rounded-full bg-stone-900 text-white hover:bg-teal-600 transition-colors shadow-sm active:scale-90">
-                          <Plus className="w-4 h-4" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex flex-wrap gap-2 mb-4">
+                          {item.tags && item.tags.map((tag: string, index: number) => (
+                            <span key={index} className="text-[10px] uppercase font-bold text-stone-400 bg-stone-50 px-2 py-1 rounded dark:bg-stone-800">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                        {/* ✅ ORDER BUTTON (Functionality to be added next step) */}
+                        <Button className="w-full bg-stone-100 text-stone-900 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-100">
+                           Add to Order
                         </Button>
-                    </div>
-                 </div>
-              </Card>
-            ) : (
-              // --- GRID CARD ---
-              <Card 
-                key={item.id} 
-                className="border-none shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden group h-full flex flex-col relative bg-white cursor-pointer"
-                onClick={() => setSelectedItem(item)}
-              >
-                {item.isRecommended && (
-                  <div className="absolute top-3 right-3 z-10">
-                    <Badge className="bg-amber-400 hover:bg-amber-500 text-black font-semibold shadow-sm gap-1">
-                      <Sparkles className="w-3 h-3" /> Chef's Choice
-                    </Badge>
-                  </div>
-                )}
-                <div className="h-48 bg-stone-200 w-full object-cover group-hover:scale-105 transition-transform duration-500" /> 
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <CardTitle className="text-xl">{item.name}</CardTitle>
-                    <span className="font-bold text-stone-700 whitespace-nowrap ml-2">{item.price}</span>
-                  </div>
-                  <div className="flex items-center gap-2 mt-1">
-                     {item.rating ? (
-                       <div className="flex items-center text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
-                         <Star className="w-3 h-3 mr-1 fill-amber-600" />
-                         {item.rating} <span className="text-stone-400 ml-1">({item.reviewCount})</span>
-                       </div>
-                     ) : (
-                       <span className="text-xs text-stone-400">New Item</span>
-                     )}
-                  </div>
-                  <div className="flex gap-2 mt-2 flex-wrap">
-                    {item.tags?.map(tag => (
-                       <Badge key={tag} variant="secondary" className="text-xs bg-stone-100 text-stone-600">{tag}</Badge>
-                    ))}
-                  </div>
-                </CardHeader>
-                <CardContent className="flex-1">
-                  <p className="text-stone-500 text-sm leading-relaxed line-clamp-3">{item.description}</p>
-                </CardContent>
-                <CardFooter className="pt-4">
-                  <Button className="w-full bg-stone-800 text-white hover:bg-stone-700 transition-colors" onClick={(e) => e.stopPropagation()}>
-                    Add to Order
-                  </Button>
-                </CardFooter>
-              </Card>
-            )
-          ))}
-
-          {/* Desktop Fallback for List Mode */}
-          {viewMode === "list" && filteredItems.map((item) => (
-             <div key={`desktop-${item.id}`} className="hidden md:block">
-                 <Card 
-                    className="border-none shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden group h-full flex flex-col relative bg-white cursor-pointer"
-                    onClick={() => setSelectedItem(item)}
-                 >
-                     <div className="h-48 bg-stone-200 w-full" />
-                     <CardHeader>
-                        <CardTitle>{item.name}</CardTitle>
-                        <p className="text-stone-500 text-sm">{item.description}</p>
-                     </CardHeader>
-                     <CardFooter>
-                       <Button className="w-full">Add to Order</Button>
-                     </CardFooter>
-                 </Card>
-             </div>
-          ))}
-        </div>
-      )}
-
-      {/* --- CENTRALIZED POPUP MODAL --- */}
-      <AnimatePresence>
-        {selectedItem && (
-          // WRAPPER: Fixed overlay that centers its children
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            
-            {/* BACKDROP */}
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSelectedItem(null)}
-              className="absolute inset-0 bg-stone-900/60 backdrop-blur-[2px]"
-            />
-            
-            {/* MODAL CARD */}
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0, y: 10 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0, y: 10 }}
-              transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="relative z-10 w-full md:max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col"
-            >
-              
-              {/* Close Button */}
-              <button 
-                onClick={() => setSelectedItem(null)}
-                className="absolute top-4 right-4 z-30 p-2 bg-black/20 hover:bg-black/40 text-white rounded-full backdrop-blur-md transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-
-              {/* Image Header */}
-              <div className="h-56 md:h-72 bg-stone-200 relative shrink-0">
-                <div className="absolute inset-0 bg-stone-300" />
-                {selectedItem.isRecommended && (
-                  <div className="absolute top-4 left-4 z-20">
-                     <Badge className="bg-amber-400 text-black border-none shadow-md">
-                        <Sparkles className="w-3 h-3 mr-1" /> Recommended
-                     </Badge>
-                  </div>
-                )}
-              </div>
-
-              {/* Scrollable Content Body */}
-              <div className="p-6 md:p-8 overflow-y-auto flex-1">
-                <div className="flex justify-between items-start mb-2">
-                  <h2 className="text-2xl md:text-3xl font-bold text-stone-900">{selectedItem.name}</h2>
-                  <span className="text-xl font-bold text-teal-700 bg-teal-50 px-3 py-1 rounded-lg">{selectedItem.price}</span>
-                </div>
-
-                <div className="flex items-center gap-3 mb-6">
-                   {selectedItem.rating && (
-                     <div className="flex items-center text-sm font-semibold text-amber-600">
-                       <Star className="w-4 h-4 mr-1 fill-amber-600" />
-                       {selectedItem.rating}
-                     </div>
-                   )}
-                   <span className="text-stone-300">|</span>
-                   <span className="text-stone-500 text-sm font-medium">{selectedItem.category}</span>
-                </div>
-
-                <p className="text-stone-600 leading-relaxed mb-6 text-base md:text-lg">
-                  {selectedItem.description}
-                </p>
-
-                <div className="flex flex-wrap gap-2 mb-8">
-                  {selectedItem.tags?.map(tag => (
-                    <Badge key={tag} variant="outline" className="border-stone-200 text-stone-500 px-3 py-1">
-                      {tag}
-                    </Badge>
+                      </CardContent>
+                    </Card>
                   ))}
                 </div>
-              </div>
-              
-              {/* Footer Button */}
-              <div className="p-6 pt-2 border-t border-stone-100 bg-white pb-6">
-                 <Button className="w-full bg-stone-900 hover:bg-teal-600 text-white h-14 text-lg rounded-2xl shadow-lg transition-all active:scale-95 flex items-center justify-between px-8">
-                    <span>Add to Order</span>
-                    <span className="opacity-80">{selectedItem.price}</span>
-                 </Button>
-              </div>
-
-            </motion.div>
-          </div>
+              </section>
+            );
+          })
         )}
-      </AnimatePresence>
-
+      </main>
     </div>
   );
-}
-
-function CategoryBtn({ label, icon, active, onClick }: any) {
-  const isActive = active === label;
-  return (
-    <Button 
-      variant={isActive ? "secondary" : "ghost"} 
-      onClick={() => onClick(label)}
-      className={cn(
-        "rounded-full whitespace-nowrap transition-all", 
-        isActive ? "bg-stone-900 text-white hover:bg-stone-800 shadow-md" : "text-stone-500 hover:text-stone-900 hover:bg-stone-200"
-      )}
-    >
-      {icon} {label}
-    </Button>
-  )
 }
