@@ -1,20 +1,39 @@
 "use client";
 
 import Link from "next/link";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+// ✅ IMPORT: doc, onSnapshot
+import { doc, onSnapshot } from "firebase/firestore"; 
+import { db } from "@/lib/firebase"; 
 import { ArrowRight, Coffee, Gamepad2, Laptop, Moon, Paintbrush, Users, CreditCard, MapPin, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-// Removed unused "Image" import to fix build error
 
 export default function Home() {
+  // ✅ NEW: Store Status State
+  const [storeStatus, setStoreStatus] = useState({
+    isOpen: true,
+    message: "Open 24/7 in Colombo."
+  });
+
+  // ✅ NEW: Real-time Listener
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "settings", "storeStatus"), (doc) => {
+      if (doc.exists()) {
+        setStoreStatus(doc.data() as any);
+      }
+    });
+    return () => unsub();
+  }, []);
+
   return (
     <div className="min-h-screen bg-stone-50 dark:bg-stone-950 font-sans selection:bg-teal-100 selection:text-teal-900">
       
       {/* 1. Hero Section */}
       <section className="relative px-6 pt-24 pb-12 text-center md:pt-32 md:px-12">
         
-        {/* --- ADDED: Login Button (Top Right) --- */}
+        {/* Login Button */}
         <div className="absolute top-6 right-6 md:top-8 md:right-8 z-50">
           <Link href="/auth">
             <Button variant="ghost" className="text-sm font-medium text-stone-900 dark:text-stone-50 hover:bg-stone-200/50 dark:hover:bg-stone-800/50 transition-colors gap-2">
@@ -22,7 +41,6 @@ export default function Home() {
             </Button>
           </Link>
         </div>
-        {/* --------------------------------------- */}
 
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
@@ -30,10 +48,20 @@ export default function Home() {
           transition={{ duration: 0.6 }}
           className="max-w-3xl mx-auto space-y-6"
         >
-          <div className="inline-flex items-center rounded-full border border-stone-200 bg-white px-3 py-1 text-sm text-stone-500 shadow-sm dark:bg-stone-900 dark:border-stone-800">
-            <span className="flex h-2 w-2 rounded-full bg-teal-500 mr-2 animate-pulse"></span>
-            Open 24/7 in Colombo.
+          {/* ✅ UPDATED: Dynamic Status Badge */}
+          <div className={`inline-flex items-center rounded-full border px-3 py-1 text-sm shadow-sm transition-colors duration-300 
+            ${storeStatus.isOpen 
+              ? 'border-stone-200 bg-white text-stone-500 dark:bg-stone-900 dark:border-stone-800' 
+              : 'border-red-200 bg-red-50 text-red-700 dark:bg-red-900/20 dark:border-red-900 dark:text-red-300'
+            }`}>
+            
+            <span className={`flex h-2 w-2 rounded-full mr-2 animate-pulse 
+              ${storeStatus.isOpen ? 'bg-teal-500' : 'bg-red-500'}`
+            }></span>
+            
+            {storeStatus.message}
           </div>
+
           <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-stone-900 dark:text-stone-50">
             OverTime <span className="text-teal-600">Café</span>
           </h1>
@@ -44,7 +72,7 @@ export default function Home() {
         </motion.div>
       </section>
 
-      {/* 2. Interactive Bento Grid */}
+      {/* 2. Bento Grid (Unchanged) */}
       <section className="px-6 pb-24 md:px-12 max-w-7xl mx-auto">
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 auto-rows-[180px]">
           
@@ -119,7 +147,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 3. Footer */}
+      {/* 3. Footer (Unchanged) */}
       <footer className="bg-white dark:bg-stone-900 border-t border-stone-200 py-16 px-6">
         <div className="max-w-4xl mx-auto text-center space-y-6">
           <h2 className="text-2xl font-bold text-stone-900 dark:text-white">Join the Inner Circle</h2>
