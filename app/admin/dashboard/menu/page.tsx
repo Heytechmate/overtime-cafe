@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Loader2, Trash2, Coffee, X, Filter, Search } from "lucide-react";
+import { Plus, Loader2, Trash2, Coffee, X, Filter, Search, Tag } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export default function MenuManagementPage() {
@@ -17,10 +17,18 @@ export default function MenuManagementPage() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [formLoading, setFormLoading] = useState(false);
+
+  // Form State
   const [formData, setFormData] = useState({
-    name: "", price: "", category: "Beverage", description: "",
-    tags: "", isRecommended: false, rating: 4.5, reviewCount: 10
+    name: "", basePrice: "", category: "Beverage", description: "",
+    tags: "", isRecommended: false
   });
+
+  // Variants State
+  const [sizes, setSizes] = useState<{ name: string, price: string }[]>([]);
+  const [addOns, setAddOns] = useState<{ name: string, price: string }[]>([]);
+  const [tempSize, setTempSize] = useState({ name: "", price: "" });
+  const [tempAddOn, setTempAddOn] = useState({ name: "", price: "" });
 
   const categories = ["All", "Beverage", "Snack", "Productivity", "Creative"];
 
@@ -37,18 +45,37 @@ export default function MenuManagementPage() {
     setFormData(prev => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
   };
 
+  const addSize = () => {
+    if (tempSize.name && tempSize.price) {
+      setSizes([...sizes, tempSize]);
+      setTempSize({ name: "", price: "" });
+    }
+  };
+
+  const addAddOn = () => {
+    if (tempAddOn.name && tempAddOn.price) {
+      setAddOns([...addOns, tempAddOn]);
+      setTempAddOn({ name: "", price: "" });
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormLoading(true);
     try {
       await addDoc(collection(db, "menu"), {
         ...formData,
-        price: "LKR " + formData.price,
+        price: "LKR " + formData.basePrice, // Fallback display price
         tags: formData.tags ? formData.tags.split(",").map(t => t.trim()) : [],
-        rating: Number(formData.rating),
-        reviewCount: Number(formData.reviewCount)
+        sizes: sizes.map(s => ({ name: s.name, price: Number(s.price) })),
+        addOns: addOns.map(a => ({ name: a.name, price: Number(a.price) })),
+        rating: 4.5,
+        reviewCount: 10
       });
-      setFormData({ name: "", price: "", category: "Beverage", description: "", tags: "", isRecommended: false, rating: 4.5, reviewCount: 10 });
+      // Reset Form
+      setFormData({ name: "", basePrice: "", category: "Beverage", description: "", tags: "", isRecommended: false });
+      setSizes([]);
+      setAddOns([]);
       setIsFormOpen(false);
     } catch (error) {
       alert("Failed to add item");
@@ -63,138 +90,159 @@ export default function MenuManagementPage() {
 
   const filteredItems = items.filter(item => {
     const matchesCategory = activeCategory === "All" || item.category === activeCategory;
-    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
   return (
     <div className="max-w-6xl mx-auto space-y-4 pb-20 px-4 sm:px-0">
       
-      {/* --- HEADER --- */}
-      <div className="flex items-center justify-between pt-2">
+      {/* HEADER */}
+      <div className="flex items-center justify-between pt-4">
         <div>
-          <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-50">Menu</h1>
-          <p className="text-xs text-stone-500">Manage your items.</p>
+          <h1 className="text-2xl font-bold text-stone-900">Menu Manager</h1>
+          <p className="text-xs text-stone-500">Add sizes & shots to your coffee.</p>
         </div>
         <Button 
           size="sm"
           onClick={() => setIsFormOpen(!isFormOpen)}
-          className={`${isFormOpen ? "bg-stone-200 text-stone-800" : "bg-stone-900 text-white"} transition-colors h-8 text-xs px-4`}
+          className={`${isFormOpen ? "bg-stone-200 text-stone-800" : "bg-stone-900 text-white"} h-9 text-xs px-4`}
         >
-          {isFormOpen ? <><X className="mr-2 h-3 w-3"/> Cancel</> : <><Plus className="mr-2 h-3 w-3"/> Add Item</>}
+          {isFormOpen ? <><X className="mr-2 h-3 w-3"/> Cancel</> : <><Plus className="mr-2 h-3 w-3"/> New Item</>}
         </Button>
       </div>
 
-      {/* --- COMPACT FORM --- */}
+      {/* FORM */}
       {isFormOpen && (
-        <Card className="border-t-4 border-t-teal-600 shadow-sm animate-in slide-in-from-top-2">
-          <CardContent className="p-4">
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card className="border-t-4 border-t-teal-600 shadow-lg animate-in slide-in-from-top-2">
+          <CardContent className="p-6">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              
+              {/* Basic Info */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="space-y-1">
-                  <Label className="text-xs">Name</Label>
-                  <Input name="name" placeholder="Item Name" value={formData.name} onChange={handleChange} className="h-8 text-xs" required />
+                  <Label>Name</Label>
+                  <Input name="name" placeholder="e.g. Latte" value={formData.name} onChange={handleChange} required />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Price (LKR)</Label>
-                  <Input name="price" type="number" placeholder="1200" value={formData.price} onChange={handleChange} className="h-8 text-xs" required />
+                  <Label>Base Price (LKR)</Label>
+                  <Input name="basePrice" type="number" placeholder="500" value={formData.basePrice} onChange={handleChange} required />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Category</Label>
-                  <select name="category" value={formData.category} onChange={handleChange} className="flex h-8 w-full rounded-md border border-input bg-transparent px-3 py-1 text-xs shadow-sm transition-colors focus-visible:outline-none dark:bg-stone-900">
+                  <Label>Category</Label>
+                  <select name="category" value={formData.category} onChange={handleChange} className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm">
                     {categories.filter(c => c !== "All").map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Tags</Label>
-                  <Input name="tags" placeholder="Vegan, Spicy" value={formData.tags} onChange={handleChange} className="h-8 text-xs" />
+                  <Label>Tags</Label>
+                  <Input name="tags" placeholder="Hot, Dairy" value={formData.tags} onChange={handleChange} />
                 </div>
+              </div>
+
+              <div className="space-y-1">
+                 <Label>Description</Label>
+                 <Input name="description" placeholder="A rich espresso with steamed milk..." value={formData.description} onChange={handleChange} required />
+              </div>
+
+              {/* Advanced Options (Sizes & Addons) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-stone-50 rounded-lg border border-stone-100">
+                
+                {/* SIZES */}
+                <div className="space-y-3">
+                   <Label className="text-teal-700 font-bold flex items-center gap-2"><Coffee size={14}/> Cup Sizes</Label>
+                   <div className="flex gap-2">
+                      <Input placeholder="Size (e.g. Large)" value={tempSize.name} onChange={e => setTempSize({...tempSize, name: e.target.value})} className="h-8 text-xs bg-white" />
+                      <Input type="number" placeholder="Price" value={tempSize.price} onChange={e => setTempSize({...tempSize, price: e.target.value})} className="h-8 text-xs bg-white w-24" />
+                      <Button type="button" onClick={addSize} size="sm" className="h-8 bg-teal-600 text-white"><Plus size={14}/></Button>
+                   </div>
+                   <div className="flex flex-wrap gap-2">
+                      {sizes.map((s, i) => (
+                        <Badge key={i} variant="outline" className="bg-white text-stone-600 pr-1">
+                          {s.name} - {s.price} <X size={12} className="ml-2 cursor-pointer hover:text-red-500" onClick={() => setSizes(sizes.filter((_, idx) => idx !== i))} />
+                        </Badge>
+                      ))}
+                   </div>
+                </div>
+
+                {/* ADD-ONS */}
+                <div className="space-y-3">
+                   <Label className="text-amber-700 font-bold flex items-center gap-2"><Tag size={14}/> Add-ons (Shots/Syrups)</Label>
+                   <div className="flex gap-2">
+                      <Input placeholder="Name (e.g. Extra Shot)" value={tempAddOn.name} onChange={e => setTempAddOn({...tempAddOn, name: e.target.value})} className="h-8 text-xs bg-white" />
+                      <Input type="number" placeholder="Price" value={tempAddOn.price} onChange={e => setTempAddOn({...tempAddOn, price: e.target.value})} className="h-8 text-xs bg-white w-24" />
+                      <Button type="button" onClick={addAddOn} size="sm" className="h-8 bg-amber-600 text-white"><Plus size={14}/></Button>
+                   </div>
+                   <div className="flex flex-wrap gap-2">
+                      {addOns.map((a, i) => (
+                        <Badge key={i} variant="outline" className="bg-white text-stone-600 pr-1">
+                          {a.name} - {a.price} <X size={12} className="ml-2 cursor-pointer hover:text-red-500" onClick={() => setAddOns(addOns.filter((_, idx) => idx !== i))} />
+                        </Badge>
+                      ))}
+                   </div>
+                </div>
+
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
-                <div className="space-y-1">
-                  <Label className="text-xs">Description</Label>
-                  <Input name="description" placeholder="Short description..." value={formData.description} onChange={handleChange} className="h-8 text-xs" required />
+              {/* Footer */}
+              <div className="flex justify-between items-center pt-2">
+                <div className="flex items-center space-x-2">
+                  <input type="checkbox" id="rec" checked={formData.isRecommended} onChange={(e) => setFormData({...formData, isRecommended: e.target.checked})} className="rounded text-teal-600 focus:ring-teal-600"/>
+                  <Label htmlFor="rec" className="text-sm">Promote as Chef's Pick</Label>
                 </div>
-                
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center space-x-2 bg-stone-50 px-3 py-1.5 rounded-md border border-stone-100 h-8">
-                    <input type="checkbox" id="isRecommended" name="isRecommended" className="h-3 w-3 rounded text-teal-600" checked={formData.isRecommended} onChange={handleChange} />
-                    <Label htmlFor="isRecommended" className="cursor-pointer text-xs font-normal">Chef's Choice</Label>
-                  </div>
-                  <Button type="submit" size="sm" className="bg-stone-900 text-white h-8 text-xs" disabled={formLoading}>
-                    {formLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : "Save"}
-                  </Button>
-                </div>
+                <Button type="submit" className="bg-stone-900 text-white px-8" disabled={formLoading}>
+                  {formLoading ? <Loader2 className="animate-spin mr-2" /> : null} Save Item
+                </Button>
               </div>
+
             </form>
           </CardContent>
         </Card>
       )}
 
-      {/* --- FILTERS & SEARCH --- */}
-      <div className="flex flex-col md:flex-row gap-3 justify-between items-center py-1">
-        <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto scrollbar-hide">
-          <Filter className="w-3 h-3 text-stone-400 flex-shrink-0" />
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setActiveCategory(cat)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${
-                activeCategory === cat 
-                  ? "bg-stone-900 text-white" 
-                  : "bg-white border border-stone-200 text-stone-600 hover:bg-stone-50 dark:bg-stone-800 dark:border-stone-700 dark:text-stone-300"
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-
-        <div className="relative w-full md:w-48">
-           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-stone-400" />
-           <Input 
-             placeholder="Search..." 
-             className="pl-8 h-8 text-xs bg-white border-stone-200 dark:bg-stone-900 dark:border-stone-800" 
-             value={searchQuery}
-             onChange={(e) => setSearchQuery(e.target.value)}
-           />
-        </div>
+      {/* SEARCH */}
+      <div className="flex justify-between items-center gap-4 bg-white p-3 rounded-lg border border-stone-200 shadow-sm">
+         <div className="flex gap-2 overflow-x-auto no-scrollbar">
+            {categories.map(c => (
+              <button key={c} onClick={() => setActiveCategory(c)} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${activeCategory === c ? "bg-stone-900 text-white" : "hover:bg-stone-100 text-stone-600"}`}>
+                {c}
+              </button>
+            ))}
+         </div>
+         <div className="relative w-48">
+            <Search className="absolute left-2 top-2 h-4 w-4 text-stone-400" />
+            <Input placeholder="Search items..." className="pl-8 h-8 text-xs" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+         </div>
       </div>
 
-      {/* --- COMPACT GRID (3 Columns) --- */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {loading ? (
-           <p className="col-span-full text-center text-stone-400 text-xs py-10">Loading...</p>
-        ) : filteredItems.length === 0 ? (
-           <div className="col-span-full text-center py-8 bg-white rounded-lg border border-dashed border-stone-200">
-             <p className="text-stone-400 text-xs">No items found.</p>
-           </div>
-        ) : (
-          filteredItems.map((item) => (
-            <div key={item.id} className="group bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 p-3 rounded-lg flex items-start justify-between shadow-sm hover:border-teal-500/30 transition-all">
-              <div className="flex items-start gap-3 overflow-hidden">
-                <div className="h-10 w-10 bg-teal-50 rounded-lg flex items-center justify-center text-teal-600 flex-shrink-0">
-                  <Coffee size={16} />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-bold text-sm text-stone-900 dark:text-stone-100 truncate">{item.name}</h4>
-                    {item.isRecommended && <div className="h-1.5 w-1.5 rounded-full bg-amber-400 flex-shrink-0" title="Chef's Choice" />}
-                  </div>
-                  <p className="text-xs text-stone-500 truncate">{item.category} • {item.price}</p>
-                </div>
-              </div>
-              <button 
-                className="text-stone-300 hover:text-red-500 transition-colors p-1"
-                onClick={() => handleDelete(item.id)}
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))
-        )}
+      {/* GRID */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filteredItems.map((item) => (
+          <div key={item.id} className="bg-white border border-stone-200 p-4 rounded-lg flex flex-col gap-3 shadow-sm hover:border-teal-500 transition-colors group relative">
+             <div className="flex justify-between items-start">
+               <div className="flex items-center gap-3">
+                 <div className="h-10 w-10 bg-stone-100 rounded-md flex items-center justify-center text-stone-400"><Coffee size={20}/></div>
+                 <div>
+                   <h4 className="font-bold text-sm text-stone-900">{item.name}</h4>
+                   <p className="text-xs text-stone-500">{item.category}</p>
+                 </div>
+               </div>
+               <span className="font-bold text-sm text-teal-700">{item.price}</span>
+             </div>
+             
+             {/* Sizes & Addons Preview */}
+             {(item.sizes?.length > 0 || item.addOns?.length > 0) && (
+               <div className="flex flex-wrap gap-1 mt-1">
+                 {item.sizes?.length > 0 && <Badge variant="secondary" className="text-[10px] h-5 bg-teal-50 text-teal-700">{item.sizes.length} Sizes</Badge>}
+                 {item.addOns?.length > 0 && <Badge variant="secondary" className="text-[10px] h-5 bg-amber-50 text-amber-700">{item.addOns.length} Add-ons</Badge>}
+               </div>
+             )}
+
+             <button onClick={() => handleDelete(item.id)} className="absolute bottom-4 right-4 text-stone-300 hover:text-red-500 transition-colors">
+               <Trash2 size={16} />
+             </button>
+          </div>
+        ))}
       </div>
     </div>
   );
