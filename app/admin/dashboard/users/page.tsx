@@ -1,204 +1,120 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { 
-  collection, doc, updateDoc, query, where, getDocs, setDoc, getDoc 
-} from "firebase/firestore";
+import { useEffect, useState } from "react";
+import { collection, query, orderBy, limit, getDocs } from "firebase/firestore"; // Changed to getDocs for cleaner list
 import { db } from "@/lib/firebase";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Search, Plus, Gift, Users } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"; // Assuming Shadcn Table component
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Loader2, Phone, Mail } from "lucide-react";
 
 export default function MembersPage() {
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState("");
-  
-  // Loyalty State
-  const [memberIdSearch, setMemberIdSearch] = useState("");
-  const [foundMember, setFoundMember] = useState<any>(null);
-  const [coffeeGoal, setCoffeeGoal] = useState(10); 
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Fetch Settings on Load
   useEffect(() => {
-    const fetchSettings = async () => {
+    const fetchUsers = async () => {
       try {
-        const docRef = doc(db, "settings", "loyalty");
-        const snap = await getDoc(docRef);
-        if (snap.exists()) {
-          setCoffeeGoal(snap.data().coffeeGoal || 10);
-        } else {
-          await setDoc(doc(db, "settings", "loyalty"), { coffeeGoal: 10 });
-        }
-      } catch (e) {
-        console.log("Error fetching settings:", e);
+        const q = query(collection(db, "users"), orderBy("joinedAt", "desc"), limit(100));
+        const querySnapshot = await getDocs(q);
+        const usersList = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setUsers(usersList);
+      } catch (error) {
+        console.error("Error fetching users:", error);
+      } finally {
+        setLoading(false);
       }
     };
-    fetchSettings();
+
+    fetchUsers();
   }, []);
 
-  const handleSearchMember = async () => {
-    setLoading(true);
-    setFoundMember(null);
-    try {
-      const q = query(collection(db, "users"), where("memberId", "==", memberIdSearch.toUpperCase()));
-      const querySnapshot = await getDocs(q);
-      
-      if (!querySnapshot.empty) {
-        const userDoc = querySnapshot.docs[0];
-        setFoundMember({ id: userDoc.id, ...userDoc.data() });
-      } else {
-        alert("Member not found!");
-      }
-    } catch (error) {
-      console.error("Search error:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAddCoffee = async () => {
-    if (!foundMember) return;
-    
-    const currentCoffees = foundMember.coffeeCount || 0;
-    const currentFree = foundMember.freeCoffees || 0;
-    let newCoffees = currentCoffees + 1;
-    let newFree = currentFree;
-
-    if (newCoffees >= coffeeGoal) {
-      newCoffees = 0; 
-      newFree += 1;
-      alert(`🎉 GOAL REACHED! ${foundMember.firstName} gets a FREE coffee!`);
-    }
-
-    try {
-      await updateDoc(doc(db, "users", foundMember.id), {
-        coffeeCount: newCoffees,
-        freeCoffees: newFree
-      });
-      setFoundMember((prev: any) => ({ ...prev, coffeeCount: newCoffees, freeCoffees: newFree }));
-      setSuccess("Coffee added!");
-      setTimeout(() => setSuccess(""), 3000);
-    } catch (error) {
-      alert("Error updating member");
-    }
-  };
-
-  const handleRedeemFree = async () => {
-    if (!foundMember || (foundMember.freeCoffees || 0) <= 0) return;
-    if(!confirm("Redeem 1 Free Coffee?")) return;
-
-    try {
-      await updateDoc(doc(db, "users", foundMember.id), {
-        freeCoffees: (foundMember.freeCoffees || 0) - 1
-      });
-      setFoundMember((prev: any) => ({ ...prev, freeCoffees: prev.freeCoffees - 1 }));
-      setSuccess("Redeemed successfully!");
-      setTimeout(() => setSuccess(""), 3000);
-    } catch (error) {
-      alert("Error redeeming");
-    }
-  }
-
-  const handleUpdateGoal = async () => {
-    const newGoal = prompt("Enter new coffee goal (e.g. 10):", coffeeGoal.toString());
-    if (newGoal && !isNaN(parseInt(newGoal))) {
-      await setDoc(doc(db, "settings", "loyalty"), { coffeeGoal: parseInt(newGoal) });
-      setCoffeeGoal(parseInt(newGoal));
-    }
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-stone-300" />
+      </div>
+    );
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8 pb-20">
-      <div className="flex justify-between items-end">
+    <div className="max-w-5xl mx-auto">
+      <div className="mb-6 flex justify-between items-end">
         <div>
-          <h1 className="text-3xl font-bold text-stone-900 dark:text-stone-50">Members</h1>
-          <p className="text-stone-500 mt-1">Manage loyalty points and member details.</p>
+          <h1 className="text-2xl font-bold text-stone-900">Member Directory</h1>
+          <p className="text-stone-500">View registered users and contact details.</p>
         </div>
+        <Badge variant="secondary" className="text-sm">
+          Total: {users.length}
+        </Badge>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        
-        {/* Search Card */}
-        <Card className="md:col-span-2 bg-white dark:bg-stone-950">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-               <Users className="text-teal-600"/> Member Search
-            </CardTitle>
-            <CardDescription>Enter Member ID (e.g. OT0001) to view details.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-2 mb-6">
-              <Input 
-                placeholder="Search Member ID..." 
-                value={memberIdSearch}
-                onChange={(e) => setMemberIdSearch(e.target.value)}
-              />
-              <Button onClick={handleSearchMember} disabled={loading}>
-                {loading ? <Loader2 className="animate-spin"/> : <Search className="w-4 h-4"/>}
-              </Button>
-            </div>
-
-            {foundMember && (
-              <div className="bg-stone-50 p-6 rounded-lg border border-stone-100 flex flex-col items-center text-center space-y-4">
-                <div className="h-16 w-16 bg-teal-100 rounded-full flex items-center justify-center text-teal-700 text-xl font-bold">
-                  {foundMember.firstName?.[0]}{foundMember.lastName?.[0]}
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold">{foundMember.firstName} {foundMember.lastName}</h3>
-                  <p className="text-stone-500 text-sm">{foundMember.memberId}</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 w-full">
-                   <div className="bg-white p-3 rounded border">
-                      <p className="text-xs text-stone-500 uppercase">Progress</p>
-                      <p className="text-2xl font-bold text-teal-600">{foundMember.coffeeCount || 0} <span className="text-sm text-stone-400">/ {coffeeGoal}</span></p>
-                   </div>
-                   <div className="bg-white p-3 rounded border">
-                      <p className="text-xs text-stone-500 uppercase">Free Coffees</p>
-                      <p className="text-2xl font-bold text-amber-600">{foundMember.freeCoffees || 0}</p>
-                   </div>
-                </div>
-
-                <div className="flex gap-3 w-full">
-                  <Button className="flex-1 bg-stone-900" onClick={handleAddCoffee}>
-                    <Plus className="w-4 h-4 mr-2"/> Add Stamp
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    className="flex-1 border-amber-200 text-amber-700 hover:bg-amber-50"
-                    onClick={handleRedeemFree}
-                    disabled={!foundMember.freeCoffees}
-                  >
-                    <Gift className="w-4 h-4 mr-2"/> Redeem Free
-                  </Button>
-                </div>
-                {success && <p className="text-green-600 text-sm font-medium animate-pulse">{success}</p>}
+      <Card>
+        <CardHeader>
+          <CardTitle>All Members</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-md border">
+            {/* Note: If you don't have the Table component installed, you can use standard HTML table tags */}
+            <table className="w-full text-sm text-left">
+              <thead className="bg-stone-50 text-stone-500 font-medium border-b">
+                <tr>
+                  <th className="p-4">Member</th>
+                  <th className="p-4">Contact Info</th>
+                  <th className="p-4">Joined Date</th>
+                  <th className="p-4">Role</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((user) => (
+                  <tr key={user.id} className="border-b last:border-0 hover:bg-stone-50/50">
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className="bg-teal-100 text-teal-700">
+                            {user.name ? user.name.charAt(0).toUpperCase() : "U"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="font-medium text-stone-900">{user.name || "Unknown"}</span>
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2 text-stone-600">
+                          <Mail className="w-3 h-3" /> {user.email}
+                        </div>
+                        {user.phone && (
+                          <div className="flex items-center gap-2 text-stone-600">
+                            <Phone className="w-3 h-3" /> {user.phone}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="p-4 text-stone-500">
+                      {user.joinedAt ? new Date(user.joinedAt).toLocaleDateString() : "N/A"}
+                    </td>
+                    <td className="p-4">
+                      <Badge variant="outline" className="capitalize bg-stone-100">
+                        {user.role || "Member"}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            
+            {users.length === 0 && (
+              <div className="p-8 text-center text-stone-400 italic">
+                No members found.
               </div>
             )}
-          </CardContent>
-        </Card>
-
-        {/* Settings Card */}
-        <Card className="bg-teal-50 dark:bg-teal-900/10 border-teal-100">
-           <CardHeader>
-             <CardTitle className="text-teal-900">Loyalty Settings</CardTitle>
-           </CardHeader>
-           <CardContent className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-teal-800">Target Cups</span>
-                <span className="text-2xl font-bold text-teal-900">{coffeeGoal}</span>
-              </div>
-              <Button variant="outline" size="sm" className="w-full" onClick={handleUpdateGoal}>
-                Change Goal
-              </Button>
-              <p className="text-xs text-teal-700 mt-2">
-                *Changing this affects all members immediately.
-              </p>
-           </CardContent>
-        </Card>
-
-      </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

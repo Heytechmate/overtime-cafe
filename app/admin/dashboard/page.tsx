@@ -1,196 +1,186 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { doc, setDoc, onSnapshot, collection, query, where, orderBy, limit } from "firebase/firestore";
+import { doc, setDoc, onSnapshot, collection, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { AlertCircle, Store, Lock, Unlock, Loader2, DollarSign, ShoppingBag, Users, AlertTriangle, Coffee, Mic, Gamepad2, CheckCircle2, Clock } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch"; // Ensure you have this or use a standard checkbox
+import { Store, Gamepad2, Mic, Users, ArrowUpRight, Zap } from "lucide-react";
+import Link from "next/link";
 
 export default function AdminDashboard() {
-  const [statusLoading, setStatusLoading] = useState(false);
-  const [storeStatus, setStoreStatus] = useState({ isOpen: true, message: "Open Now." });
-  
-  // NEW: State for Live Orders
-  const [liveOrders, setLiveOrders] = useState<any[]>([]);
+  const [storeStatus, setStoreStatus] = useState({ isOpen: true, message: "" });
+  const [gamingStatus, setGamingStatus] = useState({ ps5_available: true });
+  const [autoPilot, setAutoPilot] = useState(true); // NEW: Toggle for automation
+  const [activeBooking, setActiveBooking] = useState<any>(null);
 
+  // 1. Listen to Status
   useEffect(() => {
-    const unsubStatus = onSnapshot(doc(db, "settings", "storeStatus"), (doc) => {
-      if (doc.exists()) setStoreStatus(doc.data() as any);
-    });
-
-    // NEW: Listen for 'Pending' or 'Preparing' orders
-    const q = query(
-      collection(db, "orders"),
-      where("status", "in", ["Pending", "Preparing"]),
-      orderBy("createdAt", "desc"),
-      limit(4)
-    );
-    
-    const unsubOrders = onSnapshot(q, (snap) => {
-      setLiveOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-
-    return () => { unsubStatus(); unsubOrders(); };
+    const unsub1 = onSnapshot(doc(db, "settings", "storeStatus"), (d) => d.exists() && setStoreStatus(d.data() as any));
+    const unsub2 = onSnapshot(doc(db, "facilities", "gaming"), (d) => d.exists() && setGamingStatus(d.data() as any));
+    return () => { unsub1(); unsub2(); };
   }, []);
 
-  const handleUpdateStatus = async (newIsOpen: boolean) => {
-    setStatusLoading(true);
-    try {
-      let newMessage = storeStatus.message;
-      if (!newIsOpen && newMessage.includes("Open")) newMessage = "Closed for Prayers. Back at 1:30 PM.";
-      if (newIsOpen && newMessage.includes("Closed")) newMessage = "Open Now.";
-      await setDoc(doc(db, "settings", "storeStatus"), { isOpen: newIsOpen, message: newMessage });
-    } catch (error) { console.error(error); } finally { setStatusLoading(false); }
+  // 2. AUTO-PILOT LOGIC (The Brain)
+  useEffect(() => {
+    if (!autoPilot) return;
+
+    // Helper: Parse time string "10:00 AM" to hours (0-23)
+    const parseTime = (timeStr: string) => {
+      const [time, modifier] = timeStr.split(' ');
+      let [hours, minutes] = time.split(':');
+      let h = parseInt(hours);
+      if (hours === '12') h = 0;
+      if (modifier === 'PM') h += 12;
+      return h;
+    };
+
+    // Check Schedule
+    const checkSchedule = async () => {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      const currentHour = now.getHours();
+
+      // Fetch Today's Bookings
+      const q = query(collection(db, "bookings"), where("date", "==", todayStr));
+      const unsub = onSnapshot(q, (snapshot) => {
+         let foundActive = null;
+         
+         snapshot.docs.forEach(doc => {
+            const booking = doc.data();
+            const startHour = parseTime(booking.time);
+            // ASSUMPTION: Slots are 2 hours long
+            const endHour = startHour + 2; 
+
+            if (currentHour >= startHour && currentHour < endHour) {
+               foundActive = booking;
+            }
+         });
+
+         setActiveBooking(foundActive);
+
+         // AUTO-UPDATE DATABASE
+         if (foundActive && gamingStatus.ps5_available) {
+            console.log("Auto-Pilot: Marking as Occupied due to booking");
+            setDoc(doc(db, "facilities", "gaming"), { ps5_available: false }, { merge: true });
+         } 
+         else if (!foundActive && !gamingStatus.ps5_available) {
+             // Only free it up if it was occupied, and we found NO active bookings
+             // NOTE: You might want to remove this 'else' if you want manual control to keep it busy even if no booking
+             console.log("Auto-Pilot: Marking as Available (No Booking)");
+             setDoc(doc(db, "facilities", "gaming"), { ps5_available: true }, { merge: true });
+         }
+      });
+      return () => unsub();
+    };
+
+    checkSchedule();
+    
+    // Run check every 60 seconds
+    const interval = setInterval(checkSchedule, 60000); 
+    return () => clearInterval(interval);
+
+  }, [autoPilot, gamingStatus.ps5_available]); // Re-run if status or toggle changes
+
+
+  // Toggle Functions
+  const toggleStore = async (isOpen: boolean) => {
+    await setDoc(doc(db, "settings", "storeStatus"), { 
+      isOpen, 
+      message: isOpen ? "Open Now." : "Closed for the day." 
+    }, { merge: true });
+  };
+
+  const togglePS5 = async () => {
+    const newVal = !gamingStatus.ps5_available;
+    // If we manually toggle, we might want to temporarily disable auto-pilot? 
+    // For now, let's just force the update.
+    await setDoc(doc(db, "facilities", "gaming"), { ps5_available: newVal }, { merge: true });
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-4 pb-10">
+    <div className="max-w-5xl mx-auto space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+           <h1 className="text-2xl font-bold text-stone-900">Live Operations</h1>
+           <p className="text-sm text-stone-500">Real-time control center</p>
+        </div>
+        <div className="flex items-center gap-2 bg-stone-100 p-2 rounded-lg border">
+           <Zap className={`w-4 h-4 ${autoPilot ? 'text-amber-500 fill-amber-500' : 'text-stone-400'}`} />
+           <span className="text-xs font-medium text-stone-600">Auto-Pilot</span>
+           <Switch checked={autoPilot} onCheckedChange={setAutoPilot} className="scale-75" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Store Toggle */}
+        <Card className={`${storeStatus.isOpen ? "bg-teal-50 border-teal-200" : "bg-red-50 border-red-200"}`}>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2">
+              <Store className="w-5 h-5"/> {storeStatus.isOpen ? "Store is OPEN" : "Store is CLOSED"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+             <div className="flex gap-2">
+               <Button onClick={() => toggleStore(true)} disabled={storeStatus.isOpen} className="bg-teal-600 flex-1">Open Up</Button>
+               <Button onClick={() => toggleStore(false)} disabled={!storeStatus.isOpen} variant="destructive" className="flex-1">Close Down</Button>
+             </div>
+             <p className="mt-3 text-xs font-mono bg-white/50 p-2 rounded">Message: "{storeStatus.message}"</p>
+          </CardContent>
+        </Card>
+
+        {/* Gaming Toggle */}
+        <Card className="relative overflow-hidden">
+          {activeBooking && (
+             <div className="absolute top-0 right-0 bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-1 rounded-bl">
+                RESERVED: {activeBooking.userName}
+             </div>
+          )}
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2"><Gamepad2 className="w-5 h-5"/> Gaming Station</CardTitle>
+            <CardDescription>
+               {autoPilot ? "Managed automatically by schedule." : "Manual control enabled."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex justify-between items-center">
+             <div>
+               <p className={`text-xl font-bold ${gamingStatus.ps5_available ? "text-teal-600" : "text-red-600"}`}>
+                 {gamingStatus.ps5_available ? "Available" : "Occupied"}
+               </p>
+               <p className="text-xs text-stone-400">Updates website instantly</p>
+             </div>
+             <Button onClick={togglePS5} variant={gamingStatus.ps5_available ? "outline" : "destructive"}>
+               {gamingStatus.ps5_available ? "Mark Busy" : "Free Up"}
+             </Button>
+          </CardContent>
+        </Card>
+      </div>
       
-      {/* Header */}
-      <div className="flex justify-between items-center py-2">
-        <h1 className="text-xl font-bold text-stone-900 dark:text-stone-50">Overview</h1>
-        <Button variant="outline" size="sm" className="h-7 text-xs border-stone-200">
-          <AlertCircle className="w-3 h-3 mr-2" /> Help
-        </Button>
+      {/* Quick Links */}
+      <h3 className="text-sm font-bold text-stone-400 uppercase tracking-wider mt-8">Management</h3>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+         <QuickLink href="/admin/dashboard/bookings" title="View Bookings" icon={<Users className="w-4 h-4"/>} />
+         <QuickLink href="/admin/dashboard/games" title="Game Library" icon={<Gamepad2 className="w-4 h-4"/>} />
+         <QuickLink href="/admin/dashboard/planner" title="Holiday Planner" icon={<Mic className="w-4 h-4"/>} />
       </div>
-
-      {/* KEY METRICS */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatsCard icon={<DollarSign className="w-3.5 h-3.5"/>} label="Revenue" value="LKR 45k" sub="Today" />
-        <StatsCard icon={<ShoppingBag className="w-3.5 h-3.5"/>} label="Orders" value={liveOrders.length.toString()} sub="Active" />
-        <StatsCard icon={<Users className="w-3.5 h-3.5"/>} label="Bookings" value="5" sub="Active" />
-        <StatsCard icon={<AlertTriangle className="w-3.5 h-3.5 text-amber-500"/>} label="Stock" value="2 Low" sub="Action" />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        
-        {/* COL 1: Store Control */}
-        <div className="h-full">
-          <Card className={`h-full flex flex-col gap-0 py-0 border transition-all ${storeStatus.isOpen ? 'border-teal-200 bg-teal-50/40' : 'border-red-200 bg-red-50/40'}`}>
-            <CardHeader className="px-4 py-3 pb-0">
-              <CardTitle className={`flex items-center gap-2 text-base ${storeStatus.isOpen ? 'text-teal-900' : 'text-red-900'}`}>
-                <Store className="w-4 h-4"/> {storeStatus.isOpen ? "We are OPEN" : "We are CLOSED"}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 py-3 flex-grow flex flex-col justify-center gap-3">
-              <div className="flex gap-2">
-                <Button 
-                  size="sm"
-                  className={`flex-1 h-9 text-xs font-medium shadow-none ${storeStatus.isOpen ? 'bg-teal-600 hover:bg-teal-700' : 'bg-white text-stone-500 border'}`}
-                  onClick={() => handleUpdateStatus(true)}
-                  disabled={statusLoading}
-                >
-                  {statusLoading ? <Loader2 className="w-3 h-3 animate-spin"/> : <Unlock className="w-3 h-3 mr-2"/>} Open
-                </Button>
-                <Button 
-                  size="sm"
-                  className={`flex-1 h-9 text-xs font-medium shadow-none ${!storeStatus.isOpen ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-white text-stone-500 border'}`}
-                  onClick={() => handleUpdateStatus(false)}
-                  disabled={statusLoading}
-                >
-                   {statusLoading ? <Loader2 className="w-3 h-3 animate-spin"/> : <Lock className="w-3 h-3 mr-2"/>} Close
-                </Button>
-              </div>
-              <Input 
-                value={storeStatus.message} 
-                className="bg-white h-8 text-xs" 
-                onChange={(e) => setStoreStatus(prev => ({...prev, message: e.target.value}))}
-              />
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* COL 2 & 3: NEW Live Orders Widget (Replaces Quick Actions) */}
-        <div className="lg:col-span-2 h-full">
-           <Card className="h-full flex flex-col gap-0 py-0 border-stone-200">
-             <CardHeader className="px-4 py-3 pb-0 flex flex-row items-center justify-between">
-               <CardTitle className="text-sm font-bold text-stone-700 flex items-center gap-2">
-                 <Coffee className="w-4 h-4"/> Kitchen Queue
-               </CardTitle>
-               <Badge variant="secondary" className="text-[10px] h-5">Live Feed</Badge>
-             </CardHeader>
-             <CardContent className="px-4 py-3 flex-grow flex flex-col gap-2">
-                {liveOrders.length === 0 ? (
-                  <div className="flex items-center justify-center h-20 text-stone-400 text-xs italic bg-stone-50 rounded border border-dashed">
-                    No active orders right now.
-                  </div>
-                ) : (
-                  liveOrders.map((order) => (
-                    <div key={order.id} className="flex justify-between items-center p-2 rounded bg-white border border-stone-100 shadow-sm">
-                       <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-sm">#{order.id.slice(-4)}</span>
-                            <Badge className={order.status === 'Preparing' ? 'bg-amber-100 text-amber-700 hover:bg-amber-100' : 'bg-stone-100 text-stone-600 hover:bg-stone-100'}>
-                              {order.status}
-                            </Badge>
-                          </div>
-                          <p className="text-[10px] text-stone-500">{order.items?.length || 1} items • 2 mins ago</p>
-                       </div>
-                       <div className="flex gap-2">
-                          <Button size="icon" variant="ghost" className="h-8 w-8 text-amber-600 bg-amber-50">
-                            <Clock className="w-4 h-4" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600 bg-green-50">
-                            <CheckCircle2 className="w-4 h-4" />
-                          </Button>
-                       </div>
-                    </div>
-                  ))
-                )}
-             </CardContent>
-           </Card>
-        </div>
-      </div>
-
-      {/* NEW: Space Occupancy Row */}
-      <div className="grid grid-cols-3 gap-3">
-         <SpaceCard name="Podcast Studio" icon={<Mic className="w-4 h-4"/>} status="Occupied" until="2:00 PM" />
-         <SpaceCard name="Gaming Station" icon={<Gamepad2 className="w-4 h-4"/>} status="Available" />
-         <SpaceCard name="Meeting Pod" icon={<Users className="w-4 h-4"/>} status="Available" />
-      </div>
-
     </div>
   );
 }
 
-// Sub-components
-function StatsCard({ icon, label, value, sub }: any) {
+function QuickLink({ href, title, icon }: any) {
   return (
-    <Card className="gap-0 py-0 border-stone-200">
-      <CardContent className="p-3 flex flex-col justify-between h-full">
-        <div className="flex justify-between items-start mb-1">
-            <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">{label}</p>
-            <div className="text-stone-300 scale-90">{icon}</div>
-        </div>
-        <div>
-            <div className="text-lg font-bold text-stone-800 leading-none">{value}</div>
-            <p className="text-[10px] text-stone-400 mt-1">{sub}</p>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-function SpaceCard({ name, icon, status, until }: any) {
-  const isBusy = status === "Occupied";
-  return (
-    <Card className={`gap-0 py-0 border-l-4 ${isBusy ? 'border-l-red-500' : 'border-l-teal-500'}`}>
-       <CardContent className="p-3 flex items-center justify-between">
+    <Link href={href}>
+      <Card className="hover:bg-stone-50 transition-colors cursor-pointer border-stone-200">
+        <CardContent className="p-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-             <div className={`p-2 rounded-full ${isBusy ? 'bg-red-50 text-red-500' : 'bg-teal-50 text-teal-500'}`}>
-                {icon}
-             </div>
-             <div>
-                <p className="text-xs font-bold text-stone-700">{name}</p>
-                <p className={`text-[10px] font-medium ${isBusy ? 'text-red-600' : 'text-teal-600'}`}>
-                  {status} {until && `• Until ${until}`}
-                </p>
-             </div>
+             <div className="p-2 bg-white border rounded-full text-stone-600">{icon}</div>
+             <span className="font-medium text-sm text-stone-700">{title}</span>
           </div>
-       </CardContent>
-    </Card>
+          <ArrowUpRight className="w-4 h-4 text-stone-400" />
+        </CardContent>
+      </Card>
+    </Link>
   )
 }
