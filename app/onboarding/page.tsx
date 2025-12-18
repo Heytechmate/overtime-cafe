@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore"; // Use setDoc for merge capability
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, User, Calendar } from "lucide-react";
+import { Loader2, Calendar, Phone } from "lucide-react";
 
 export default function OnboardingPage() {
   const [loading, setLoading] = useState(false);
@@ -20,10 +20,11 @@ export default function OnboardingPage() {
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
+    phone: "", // NEW: Capture Phone
     birthDate: ""
   });
 
-  // 1. Check if user is logged in
+  // 1. Check Login & Profile Status
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (!currentUser) {
@@ -32,14 +33,20 @@ export default function OnboardingPage() {
       }
       setUser(currentUser);
       
-      // Check if profile is already complete
       const docRef = doc(db, "users", currentUser.uid);
       const docSnap = await getDoc(docRef);
       
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data.firstName && data.lastName && data.birthDate) {
-          router.push("/dashboard"); // Already complete? Go to hub.
+        // Pre-fill existing data (e.g., name from Google)
+        if (data.name) {
+            const [first, ...last] = data.name.split(" ");
+            setFormData(prev => ({...prev, firstName: first, lastName: last.join(" ")}));
+        }
+        
+        // If everything is already there, skip to dashboard
+        if (data.isProfileComplete) {
+          router.push("/dashboard"); 
         }
       }
       setChecking(false);
@@ -54,16 +61,18 @@ export default function OnboardingPage() {
     if (!user) return;
 
     try {
-      // 2. Update Firestore Profile
-      await updateDoc(doc(db, "users", user.uid), {
+      // 2. Save Profile (Merge ensures we don't overwrite existing fields like email/role)
+      await setDoc(doc(db, "users", user.uid), {
+        name: `${formData.firstName} ${formData.lastName}`, // Combine for display
         firstName: formData.firstName,
         lastName: formData.lastName,
+        phone: formData.phone,
         birthDate: formData.birthDate,
         isProfileComplete: true,
         updatedAt: new Date()
-      });
+      }, { merge: true });
 
-      // 3. Redirect to Hub
+      // 3. Go to Dashboard
       router.push("/dashboard");
     } catch (error) {
       console.error("Error updating profile:", error);
@@ -84,10 +93,10 @@ export default function OnboardingPage() {
       <Card className="w-full max-w-[450px] shadow-xl border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950">
         <CardHeader>
           <CardTitle className="text-2xl font-bold text-stone-900 dark:text-stone-50">
-            Welcome to the Club!
+            One Last Step
           </CardTitle>
           <CardDescription>
-            We need a few details to set up your rewards & birthday perks.
+            Complete your profile to unlock member perks.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -98,7 +107,6 @@ export default function OnboardingPage() {
                 <Label htmlFor="firstName">First Name</Label>
                 <Input 
                   id="firstName" 
-                  placeholder="Jane" 
                   value={formData.firstName}
                   onChange={(e) => setFormData({...formData, firstName: e.target.value})}
                   required 
@@ -108,9 +116,24 @@ export default function OnboardingPage() {
                 <Label htmlFor="lastName">Last Name</Label>
                 <Input 
                   id="lastName" 
-                  placeholder="Doe" 
                   value={formData.lastName}
                   onChange={(e) => setFormData({...formData, lastName: e.target.value})}
+                  required 
+                />
+              </div>
+            </div>
+
+            {/* NEW: Phone Field */}
+            <div className="space-y-2">
+              <Label htmlFor="phone">Mobile Number</Label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-2.5 h-4 w-4 text-stone-500" />
+                <Input 
+                  id="phone" 
+                  placeholder="077 123 4567" 
+                  className="pl-9"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
                   required 
                 />
               </div>
@@ -129,7 +152,7 @@ export default function OnboardingPage() {
                   required 
                 />
               </div>
-              <p className="text-xs text-stone-500">We send you a free coffee on your birthday! 🎂</p>
+              <p className="text-xs text-stone-500">Free coffee on your birthday! 🎂</p>
             </div>
 
             <Button type="submit" className="w-full bg-teal-600 hover:bg-teal-700 text-white" disabled={loading}>
